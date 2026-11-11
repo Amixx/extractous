@@ -22,7 +22,14 @@ What differs from v0.3.0, all under `extractous-core/`:
   Office, OpenDocument, RTF, HTML, XML, e-mail and image documents. Tika 3
   renamed several classes loaded by name, such as the HTML parser and the
   XML parser factories; without these entries the build succeeds and
-  those formats fail at run time. All v0.3.0 entries are kept.
+  those formats fail at run time. All v0.3.0 entries are kept. The
+  metadata also registers every compiled OOXML schema (`.xsb`) and every
+  XMLBeans `…Impl` class in `poi-ooxml-full`, so POI can read DOCX,
+  XLSX and PPTX parts no trace met, such as a DOCX comments part, and
+  `DefaultParser`'s public constructors, without which the library
+  ignores the `<parser>` elements of a Tika config file.
+- `tika-native-tools/`: the scripts that write that metadata (see
+  below).
 - `build.rs`: `OUT_DIR/libs` comes only from that OUT_DIR's own Gradle
   build. v0.3.0 copies in the libs of the first
   `target/<profile>/build/extractous-*` dir it finds, which can be another
@@ -46,3 +53,28 @@ extractous = { git = "https://github.com/Amixx/extractous", rev = "<commit>" }
 
 Only macOS (arm64) was built and tested end to end; the Linux and Windows
 metadata got the same additions.
+
+## Updating the metadata
+
+The scripts in `extractous-core/tika-native-tools/` run with
+[Bun](https://bun.sh) and need `GRAALVM_HOME` set to a GraalVM 23. Both
+merge into the metadata of all three OSes and only add entries. They
+live outside `tika-native/`, the directory the build script copies and
+builds, so they are no input of the library. Commands below run from
+`extractous-core/`.
+
+For a Tika or POI version bump, or a document that fails only in the
+native library:
+
+1. Change what needs changing. For a Tika release: `tikaVersion` in
+   `tika-native/build.gradle` and the names of the three
+   `tika-<version>-<os>` metadata dirs.
+2. Trace Tika on a JVM over a document set, once with Tika's default
+   config and once with each `--tika-config` given:
+   `bun tika-native-tools/trace-metadata.ts [--tika-config <file>]... <documents dir>...`
+3. Regenerate the POI entries from the `poi-ooxml-full` jar Tika
+   depends on (Gradle keeps it under
+   `~/.gradle/caches/modules-2/files-2.1/org.apache.poi/poi-ooxml-full/`):
+   `bun tika-native-tools/ooxml-metadata.ts <poi-ooxml-full.jar>`
+4. Build, test, update this file, and push to `tika-3`.
+5. Consumers set `rev` to the new commit.
