@@ -32,6 +32,11 @@ What differs from v0.3.0, all under `extractous-core/`:
   build. Gradle creates `nativeCompile/` before native-image runs, so an
   interrupted build runs Gradle again instead of copying from an empty
   dir.
+- `build.rs`: the built libraries go only to `OUT_DIR`. v0.3.0 also
+  copies them into `bindings/extractous-python/`, outside `OUT_DIR`,
+  which a Cargo git checkout contains too; two builds sharing that
+  checkout race on the copy. The Python bindings are not built from
+  this branch.
 
 Use it as a Cargo git dependency pinned to a commit:
 

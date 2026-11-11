@@ -11,12 +11,8 @@ fn main() {
         return;
     }
 
-    // Set tika_native source directory and python bindings directory
     let root_dir = env::var("CARGO_MANIFEST_DIR").map(PathBuf::from).unwrap();
     let tika_native_source_dir = root_dir.join("tika-native");
-    // canonicalize does not work on Windows because it returns UNC paths
-    //let python_bind_dir = fs::canonicalize("../bindings/extractous-python/python/extractous").unwrap();
-    let python_bind_dir = root_dir.join("../bindings/extractous-python/python/extractous");
 
     // Main build output directory
     let out_dir = env::var("OUT_DIR").map(PathBuf::from).unwrap();
@@ -38,12 +34,7 @@ fn main() {
         println!("Lib tika_native files were updated");
         fs_extra::dir::remove(&libs_out_dir).ok();
         fs_extra::dir::remove(&tika_native_dir).ok();
-        gradle_build(
-            &tika_native_source_dir,
-            &out_dir,
-            &libs_out_dir,
-            &python_bind_dir,
-        );
+        gradle_build(&tika_native_source_dir, &out_dir, &libs_out_dir);
     } else {
         // Copy from this OUT_DIR's last Gradle build.
         println!("Lib tika_native files were not updated");
@@ -99,12 +90,7 @@ fn is_dir_updated(src: &Path, dest: &Path) -> bool {
 }
 
 // Run the gradle build command to build tika-native
-fn gradle_build(
-    tika_native_source_dir: &PathBuf,
-    out_dir: &PathBuf,
-    libs_out_dir: &PathBuf,
-    python_bind_dir: &PathBuf,
-) {
+fn gradle_build(tika_native_source_dir: &PathBuf, out_dir: &PathBuf, libs_out_dir: &PathBuf) {
     let jdk_install_dir = out_dir.join("graalvm-jdk"); // out_dir subdir where jdk is downloaded
     let tika_native_dir = out_dir.join("tika-native"); // out_dir subdir where the gradle build is run
 
@@ -148,18 +134,8 @@ fn gradle_build(
         "Gradle failed to build tika-native ({status})"
     );
 
-    // Decide where to copy the graalvm build artifacts
-    let mut copy_to_dirs = vec![libs_out_dir];
-    if python_bind_dir.is_dir() {
-        // If python binding directory exists, copy the build artifacts to it
-        // When running cargo publish the CARGO_MANIFEST_DIR points to a different directory
-        // than the root dir.
-        copy_to_dirs.push(python_bind_dir);
-    };
-
-    // Copy the build artifacts to the specified directories
     let build_path = tika_native_dir.join("build/native/nativeCompile");
-    copy_build_artifacts(&build_path, copy_to_dirs, true);
+    copy_build_artifacts(&build_path, vec![libs_out_dir], true);
     fs::write(tika_native_dir.join(BUILT_STAMP), "").expect("Failed to write the build stamp");
 
     println!("Successfully built libs 🚀");
