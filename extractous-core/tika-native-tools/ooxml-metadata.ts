@@ -16,39 +16,12 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fail, graalvmHome, mergeIntoEveryOs } from "./metadata";
-
-const END_OF_CENTRAL_DIRECTORY = 0x06054b50;
-const CENTRAL_DIRECTORY_HEADER = 0x02014b50;
-
-/** Entry names of a zip archive, read from its central directory (no ZIP64). */
-function zipEntries(zip: Uint8Array, name: string): string[] {
-	const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
-	// The end record is 22 bytes plus a comment of up to 65535 bytes.
-	let end = zip.length - 22;
-	while (end >= Math.max(0, zip.length - 22 - 0xffff) && view.getUint32(end, true) !== END_OF_CENTRAL_DIRECTORY) end--;
-	if (end < 0 || view.getUint32(end, true) !== END_OF_CENTRAL_DIRECTORY) fail(`${name} is not a zip archive`);
-	const count = view.getUint16(end + 10, true);
-	let offset = view.getUint32(end + 16, true);
-	if (count === 0xffff || offset === 0xffffffff) fail(`${name} is a ZIP64 archive`);
-
-	const decoder = new TextDecoder();
-	const names: string[] = [];
-	for (let i = 0; i < count; i++) {
-		if (view.getUint32(offset, true) !== CENTRAL_DIRECTORY_HEADER) fail(`${name} has a corrupt central directory`);
-		const nameLength = view.getUint16(offset + 28, true);
-		const extraLength = view.getUint16(offset + 30, true);
-		const commentLength = view.getUint16(offset + 32, true);
-		names.push(decoder.decode(zip.subarray(offset + 46, offset + 46 + nameLength)));
-		offset += 46 + nameLength + extraLength + commentLength;
-	}
-	return names;
-}
+import { fail, graalvmHome, mergeIntoEveryOs, run } from "./metadata";
 
 const jar = process.argv[2] ?? fail("usage: bun ooxml-metadata.ts <poi-ooxml-full.jar>");
 const graalvm = graalvmHome();
 
-const entries = zipEntries(await Bun.file(jar).bytes(), jar);
+const entries = run([join(graalvm, "bin", "jar"), "tf", jar]).split("\n").filter((entry) => entry !== "");
 const implClasses = entries
 	.filter((entry) => /\/impl\/[^/$]+Impl\.class$/.test(entry))
 	.map((entry) => entry.slice(0, -".class".length).replaceAll("/", "."));
